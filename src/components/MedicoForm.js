@@ -52,12 +52,17 @@ const MedicoForm = ({medico, onSave, onCancel, navigation})=>{
 
     // Função de submissão do formulario
     const handleSubmit = ()=>{
-        // Supondo que a função lida com a lógica de API/Estado
-        onSave(formData);
-        Alert.alert(
+        if(validate()){
+            // Supondo que a função lida com a lógica de API/Estado
+            onSave(formData);
+            Alert.alert(
             isEditing ? 'Sucesso':'Cadastro Concluido',
             isEditing ? 'Dados do medico atualizado.': 'Novo medico cadastrado!'
-        )
+            )
+        
+        }else{
+            Alert.alert('Error', 'Por favor, preencha todos os campos.')
+        }
     }
 
 }    
