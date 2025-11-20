@@ -1,8 +1,8 @@
 // App.js (Usando React Navigation como exemplo de estrutura profissional)
 import React, { useState } from 'react';
 import {View, Text, StyleSheet} from 'react-native'
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { NavigationContainer } from '@react-navigation/native'; // npm install @react-navigation/native
+import { createStackNavigator } from '@react-navigation/stack'; // npm install @react-navigation/stack
 
 // Importa todos os componentes de tela
 import Splash from './src/screens/Splash/Splash';
