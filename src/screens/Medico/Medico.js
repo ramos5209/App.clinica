@@ -14,8 +14,8 @@ import {
   Alert,
   ActivityIndicator
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native'; // Importante para recarregar a lista
-import api from '../../Services/api'; // Seu arquivo api.js configurado
+import { useFocusEffect } from '@react-navigation/native'; 
+import api from '../../Services/api'; 
 
 const IconeLupa = require('../../../assets/lupa.png'); 
 const IconeSeta = require('../../../assets/seta.png'); 
@@ -26,7 +26,7 @@ if (Platform.OS === 'android') {
   }
 }
 
-// Função auxiliar de agrupamento
+// Função para agrupar médicos por inicial e filtrar por texto
 const groupAndFilterMedicos = (medicos, searchText) => {
   const filteredMedicos = medicos.filter(medico => 
     medico.nome.toLowerCase().includes(searchText.toLowerCase()) || 
@@ -54,13 +54,17 @@ const MedicoCard = ({ medico, navigation, onDelete }) => {
     setIsExpanded(!isExpanded);
   };
 
-  const handleDelete = () => {
+  const confirmDelete = () => {
     Alert.alert(
-      "Confirmar Exclusão",
-      `Deseja realmente desativar o médico ${medico.nome}?`,
+      "Desativar Médico",
+      `Tem certeza que deseja desativar o médico ${medico.nome}?`,
       [
         { text: "Cancelar", style: "cancel" },
-        { text: "Desativar", style: "destructive", onPress: () => onDelete(medico.id) }
+        { 
+          text: "Confirmar", 
+          style: "destructive", 
+          onPress: () => onDelete(medico.id) 
+        }
       ]
     );
   };
@@ -81,9 +85,8 @@ const MedicoCard = ({ medico, navigation, onDelete }) => {
       {isExpanded && (
         <View style={cardStyles.details}>
           <Text style={cardStyles.detailText}>Email: {medico.email}</Text>
-          <Text style={cardStyles.detailText}>Telefone: {medico.telefone || 'N/A'}</Text>
-          {/* O back-end não retorna o endereço completo na listagem simples, a menos que ajustemos o DTO. 
-              Se necessário, podemos fazer uma chamada api.get(`/medicos/${medico.id}`) para detalhes completos */}
+          {/* Telefone não vem no DTO de listagem padrão do Java, mas se vier, pode exibir aqui */}
+          <Text style={cardStyles.detailText}>Telefone: {medico.telefone || 'Ver detalhes'}</Text>
           
           <View style={cardStyles.actionButtons}>
             <Button
@@ -94,7 +97,7 @@ const MedicoCard = ({ medico, navigation, onDelete }) => {
             <Button
               title="Desativar"
               color="red"
-              onPress={handleDelete} 
+              onPress={confirmDelete} 
             />
           </View>
         </View>
@@ -108,12 +111,12 @@ const MedicoScreen = ({ navigation }) => {
   const [medicos, setMedicos] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Função para carregar dados
   const loadMedicos = async () => {
     setLoading(true);
     try {
+      // Chama o Controller Java: GET /medicos
       const response = await api.get('/medicos');
-      // O Spring Boot retorna Page<>, os dados estão em 'content'
+      // Spring Boot retorna Page<>, a lista real está em .content
       setMedicos(response.data.content || []); 
     } catch (error) {
       console.error("Erro ao buscar médicos:", error);
@@ -123,16 +126,17 @@ const MedicoScreen = ({ navigation }) => {
     }
   };
 
-  // Recarrega a lista sempre que a tela ganha foco (ex: ao voltar do cadastro)
+  // Recarrega a lista sempre que a tela ganha foco
   useFocusEffect(useCallback(() => {
     loadMedicos();
   }, []));
 
   const handleDeleteMedico = async (id) => {
     try {
+      // Chama o Controller Java: DELETE /medicos/{id}
       await api.delete(`/medicos/${id}`);
       Alert.alert("Sucesso", "Médico desativado com sucesso.");
-      loadMedicos(); // Atualiza a lista
+      loadMedicos(); // Atualiza a lista (o médico inativo não virá mais)
     } catch (error) {
       console.error("Erro ao excluir:", error);
       Alert.alert("Erro", "Não foi possível desativar o médico.");
@@ -170,7 +174,7 @@ const MedicoScreen = ({ navigation }) => {
             renderSectionHeader={({ section: { title } }) => (
               <Text style={styles.sectionHeader}>{title}</Text>
             )}
-            ListEmptyComponent={<Text style={{textAlign:'center', marginTop: 20}}>Nenhum médico encontrado.</Text>}
+            ListEmptyComponent={<Text style={{textAlign:'center', marginTop: 20, color: '#888'}}>Nenhum médico encontrado.</Text>}
           />
         </View>
       )}
@@ -178,7 +182,7 @@ const MedicoScreen = ({ navigation }) => {
       <View style={styles.fixedButtonContainer}>
         <Button
           title="Cadastrar Novo Perfil"
-          onPress={() => navigation.navigate('MedicoForm')} // Navega para a tela de cadastro vazia
+          onPress={() => navigation.navigate('MedicoForm')} 
         />
       </View>
     </View>

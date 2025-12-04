@@ -11,6 +11,7 @@ import Medico from './src/screens/Medico/Medico';
 import Paciente from './src/screens/Paciente/Paciente';
 import Consulta from './src/screens/Consulta/Consulta';
 import CadastroEdicaoMedicoScreen from './src/screens/Medico/CadastroEdicaoMedicoScreen';
+import CadastroEdicaoPacienteScreen from './src/screens/Paciente/CadastroEdicaoPacienteScreen';
 
 const Stack = createStackNavigator();
 
@@ -62,6 +63,11 @@ function App() {
           name="MedicoForm" 
           component={CadastroEdicaoMedicoScreen} 
           options={{ title: 'Gerenciar Médico' }} 
+        />
+        <Stack.Screen 
+          name="PacienteForm" 
+          component={CadastroEdicaoPacienteScreen} 
+          options={{ title: 'Gerenciar Paciente' }} 
         />
 
         {/* Tela Genérica */}
