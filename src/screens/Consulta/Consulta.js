@@ -1,5 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Modal } from 'react-native';
+import { 
+  View, Text, FlatList, StyleSheet, TouchableOpacity, 
+  Alert, Modal, Platform 
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Picker } from '@react-native-picker/picker';
 import api from '../../Services/api';
@@ -7,35 +10,53 @@ import api from '../../Services/api';
 const Consulta = ({ navigation }) => {
   const [consultas, setConsultas] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [consultaParaCancelar, setConsultaParaCancelar] = useState(null);
+  const [consultaSelecionada, setConsultaSelecionada] = useState(null);
   const [motivo, setMotivo] = useState('PACIENTE_DESISTIU');
 
   const loadConsultas = async () => {
     try {
-      const response = await api.get('/consultas'); // Requer implementação do GET no backend
+      const response = await api.get('/consultas');
       setConsultas(response.data.content || []);
     } catch (error) {
-      console.error(error);
+      console.log("Erro ao carregar consultas", error);
     }
   };
 
   useFocusEffect(useCallback(() => { loadConsultas(); }, []));
 
-  const abrirModalCancelamento = (id) => {
-    setConsultaParaCancelar(id);
+  const abrirModal = (consulta) => {
+    setConsultaSelecionada(consulta);
     setModalVisible(true);
   };
 
+  // Função auxiliar para exibir feedback compatível com Web e Mobile
+  const showFeedback = (titulo, mensagem) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${titulo}\n${mensagem}`);
+    } else {
+      Alert.alert(titulo, mensagem);
+    }
+  };
+
   const confirmarCancelamento = async () => {
+    // Validação extra para Web se não estiver usando o Modal (opcional, pois o Modal já protege)
+    if (Platform.OS === 'web' && !modalVisible) {
+       const confirmed = window.confirm("Tem certeza que deseja cancelar?");
+       if (!confirmed) return;
+    }
+
     try {
       await api.delete('/consultas', {
-        data: { idConsulta: consultaParaCancelar, motivo: motivo }
+        data: { idConsulta: consultaSelecionada.id, motivo: motivo }
       });
-      Alert.alert("Sucesso", "Consulta cancelada.");
+      
+      showFeedback("Sucesso", "Consulta cancelada.");
+      
       setModalVisible(false);
-      loadConsultas();
+      loadConsultas(); // Recarrega a lista: O item cancelado NÃO virá mais do backend
     } catch (error) {
-      Alert.alert("Erro", "Não foi possível cancelar.");
+      const msg = error.response?.data || "Erro ao cancelar.";
+      showFeedback("Erro", typeof msg === 'string' ? msg : "Falha na requisição");
     }
   };
 
@@ -50,21 +71,27 @@ const Consulta = ({ navigation }) => {
       <FlatList
         data={consultas}
         keyExtractor={item => item.id.toString()}
+        ListEmptyComponent={<Text style={styles.emptyText}>Nenhuma consulta agendada.</Text>}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Data: {new Date(item.data).toLocaleString()}</Text>
-            <Text>Médico ID: {item.idMedico}</Text>
-            <Text>Paciente ID: {item.idPaciente}</Text>
+            <Text style={styles.cardHeader}>
+                {new Date(item.data).toLocaleString('pt-BR')}
+            </Text>
+            <View style={styles.cardBody}>
+              <Text>Médico ID: {item.idMedico}</Text>
+              <Text>Paciente ID: {item.idPaciente}</Text>
+            </View>
+            {/* O botão abre o Modal, que funciona igual na Web e Mobile */}
             <TouchableOpacity 
               style={styles.btnCancel}
-              onPress={() => abrirModalCancelamento(item.id)}>
+              onPress={() => abrirModal(item)}>
               <Text style={styles.btnCancelText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         )}
       />
 
-      {/* Modal de Cancelamento estilo PDF */}
+      {/* Modal de Cancelamento (Estilo PDF) - Funciona na Web */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -73,13 +100,23 @@ const Consulta = ({ navigation }) => {
       >
         <View style={styles.centeredView}>
           <View style={styles.modalView}>
-            <Text style={styles.modalText}>Deseja cancelar esta consulta?</Text>
+            <Text style={styles.modalTitle}>Deseja cancelar esta consulta?</Text>
             
-            <Text style={styles.label}>Motivo do cancelamento</Text>
+            {consultaSelecionada && (
+              <View style={styles.modalInfo}>
+                <Text style={styles.modalDate}>
+                  {new Date(consultaSelecionada.data).toLocaleString('pt-BR')}
+                </Text>
+              </View>
+            )}
+
+            <Text style={styles.label}>Selecione o motivo:</Text>
             <View style={styles.pickerBox}>
               <Picker
                 selectedValue={motivo}
-                onValueChange={(val) => setMotivo(val)}>
+                onValueChange={(val) => setMotivo(val)}
+                style={{ height: 50, width: '100%' }} // Ajuste para Web
+                >
                 <Picker.Item label="Paciente desistiu" value="PACIENTE_DESISTIU" />
                 <Picker.Item label="Médico cancelou" value="MEDICO_CANCELOU" />
                 <Picker.Item label="Outros" value="OUTROS" />
@@ -87,15 +124,15 @@ const Consulta = ({ navigation }) => {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, styles.buttonClose]}
+              style={styles.modalBtnConfirm}
               onPress={confirmarCancelamento}>
               <Text style={styles.textStyle}>Confirmar cancelamento</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.button, {backgroundColor: 'transparent', marginTop: 10}]}
+              style={styles.modalBtnBack}
               onPress={() => setModalVisible(false)}>
-              <Text style={{color: '#333'}}>Voltar</Text>
+              <Text style={styles.backText}>Voltar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -107,21 +144,34 @@ const Consulta = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5' },
   btnNew: { backgroundColor: '#007AFF', padding: 15, borderRadius: 8, marginBottom: 20 },
-  btnNewText: { color: '#fff', textAlign: 'center', fontWeight: 'bold' },
+  btnNewText: { color: '#fff', textAlign: 'center', fontWeight: 'bold', fontSize: 16 },
+  emptyText: { textAlign: 'center', color: '#888', marginTop: 20 },
   card: { backgroundColor: '#fff', padding: 15, borderRadius: 8, marginBottom: 10, elevation: 2 },
-  cardTitle: { fontWeight: 'bold', marginBottom: 5 },
-  btnCancel: { marginTop: 10, alignSelf: 'flex-end' },
-  btnCancelText: { color: 'red' },
+  cardHeader: { fontWeight: 'bold', fontSize: 16, marginBottom: 5, color: '#333' },
+  cardBody: { marginBottom: 10 },
+  btnCancel: { alignSelf: 'flex-start', backgroundColor: '#ffecec', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 5 },
+  btnCancelText: { color: 'red', fontWeight: 'bold', fontSize: 12 },
   
   // Modal Styles
-  centeredView: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalView: { width: '85%', backgroundColor: "white", borderRadius: 20, padding: 35, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 },
-  modalText: { marginBottom: 15, textAlign: "center", fontSize: 18, fontWeight: 'bold' },
-  pickerBox: { width: '100%', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginBottom: 20 },
-  button: { borderRadius: 8, padding: 15, elevation: 2, width: '100%' },
-  buttonClose: { backgroundColor: "#2196F3" },
-  textStyle: { color: "white", fontWeight: "bold", textAlign: "center" },
-  label: { alignSelf: 'flex-start', marginBottom: 5, color: '#666' }
+  centeredView: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalView: { 
+    width: Platform.OS === 'web' ? '400px' : '90%', // Largura fixa na Web para não esticar
+    backgroundColor: "white", 
+    borderRadius: 20, 
+    padding: 25, 
+    alignItems: "center", 
+    shadowColor: "#000", 
+    elevation: 5 
+  },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: "center" },
+  modalInfo: { marginBottom: 15, alignItems: 'center' },
+  modalDate: { fontSize: 16, fontWeight: '600', color: '#007AFF' },
+  label: { alignSelf: 'flex-start', marginBottom: 5, color: '#666' },
+  pickerBox: { width: '100%', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginBottom: 20, overflow: 'hidden' },
+  modalBtnConfirm: { backgroundColor: "#0B3B60", borderRadius: 8, padding: 15, width: '100%', alignItems: 'center' },
+  textStyle: { color: "white", fontWeight: "bold" },
+  modalBtnBack: { marginTop: 15 },
+  backText: { color: '#333', fontWeight: 'bold' }
 });
 
 export default Consulta;

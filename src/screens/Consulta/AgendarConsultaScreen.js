@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import api from '../../Services/api';
 
@@ -9,23 +9,37 @@ const AgendarConsultaScreen = ({ navigation }) => {
   
   const [selectedPaciente, setSelectedPaciente] = useState('');
   const [selectedMedico, setSelectedMedico] = useState('');
+  const [selectedEspecialidade, setSelectedEspecialidade] = useState('');
   const [data, setData] = useState('');
   const [hora, setHora] = useState('');
-  
-  // No PDF, não tem seleção de especialidade para random, 
-  // mas o backend pede. Vou assumir seleção direta de médico ou lógica extra.
-  // Aqui farei seleção simples de médico.
+
+  const especialidades = [
+    { label: 'Cardiologia', value: 'CARDIOLOGIA' },
+    { label: 'Dermatologia', value: 'DERMATOLOGIA' },
+    { label: 'Ginecologia', value: 'GINECOLOGIA' },
+    { label: 'Ortopedia', value: 'ORTOPEDIA' },
+  ];
+
+  // Função auxiliar para alertas compatível com Web e Native
+  const showAlert = (titulo, mensagem, onPress = null) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${titulo}\n\n${mensagem}`);
+      if (onPress) onPress();
+    } else {
+      Alert.alert(titulo, mensagem, onPress ? [{ text: 'OK', onPress }] : [{ text: 'OK' }]);
+    }
+  };
 
   useEffect(() => {
-    // Carregar Pacientes e Médicos para os Dropdowns
     async function loadData() {
       try {
         const resPac = await api.get('/pacientes');
         const resMed = await api.get('/medicos');
-        setPacientes(resPac.data.content);
-        setMedicos(resMed.data.content);
+        setPacientes(resPac.data.content || []);
+        setMedicos(resMed.data.content || []);
       } catch (e) {
-        Alert.alert("Erro", "Falha ao carregar listas.");
+        console.error(e);
+        showAlert("Erro", "Falha ao carregar listas de médicos e pacientes.");
       }
     }
     loadData();
@@ -33,62 +47,90 @@ const AgendarConsultaScreen = ({ navigation }) => {
 
   const handleAgendar = async () => {
     if (!selectedPaciente || !data || !hora) {
-      Alert.alert("Erro", "Preencha os campos obrigatórios.");
+      showAlert("Atenção", "Preencha paciente, data e hora.");
       return;
     }
 
-    // Formatar data ISO 8601: YYYY-MM-DDTHH:MM:SS
-    // Assumindo input simples DD/MM/YYYY e HH:MM
-    // Para produção, use bibliotecas como 'date-fns' ou um DatePicker nativo
+    // Formata a data para ISO 8601 (YYYY-MM-DDTHH:MM:SS)
     const [dia, mes, ano] = data.split('/');
     const dataISO = `${ano}-${mes}-${dia}T${hora}:00`;
 
     const payload = {
       idPaciente: selectedPaciente,
-      idMedico: selectedMedico || null, // Se vazio, backend escolhe (precisa enviar especialidade nesse caso)
-      data: dataISO,
-      // especialidade: 'CARDIOLOGIA' // Caso queira implementar a lógica aleatória
+      idMedico: selectedMedico || null, 
+      especialidade: !selectedMedico ? selectedEspecialidade : null,
+      data: dataISO
     };
 
     try {
       await api.post('/consultas', payload);
-      Alert.alert("Sucesso", "Consulta agendada!");
-      navigation.goBack();
+      
+      showAlert("Sucesso", "Consulta agendada com sucesso!", () => {
+        navigation.goBack();
+      });
+
     } catch (error) {
-      const msg = error.response?.data || "Erro ao agendar.";
-      Alert.alert("Erro", typeof msg === 'string' ? msg : JSON.stringify(msg));
+      // Lógica para capturar a mensagem de erro do backend
+      let msg = "Erro desconhecido ao agendar.";
+      
+      if (error.response?.data) {
+        // Se for ValidacaoException, vem como string direta
+        if (typeof error.response.data === 'string') {
+          msg = error.response.data;
+        } 
+        // Se for erro de validação de campos (@Valid), vem como array de objetos
+        else if (Array.isArray(error.response.data)) {
+          msg = error.response.data.map(e => `${e.campo}: ${e.mensagem}`).join('\n');
+        }
+      }
+      
+      showAlert("Não foi possível agendar", msg);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Agendar consulta</Text>
-      
       <ScrollView>
+        <Text style={styles.header}>Agendar Consulta</Text>
+
         <Text style={styles.label}>Paciente</Text>
-        <View style={styles.pickerContainer}>
+        <View style={styles.inputWrap}>
           <Picker
             selectedValue={selectedPaciente}
             onValueChange={(val) => setSelectedPaciente(val)}>
-            <Picker.Item label="Selecione um paciente" value="" />
+            <Picker.Item label="Selecione um paciente..." value="" />
             {pacientes.map(p => <Picker.Item key={p.id} label={p.nome} value={p.id} />)}
           </Picker>
         </View>
 
         <Text style={styles.label}>Médico (Opcional)</Text>
-        <View style={styles.pickerContainer}>
+        <View style={styles.inputWrap}>
           <Picker
             selectedValue={selectedMedico}
             onValueChange={(val) => setSelectedMedico(val)}>
-            <Picker.Item label="Aleatório (Selecione Especialidade no código)" value="" />
+            <Picker.Item label="Escolha aleatória" value="" />
             {medicos.map(m => <Picker.Item key={m.id} label={m.nome} value={m.id} />)}
           </Picker>
         </View>
 
+        {!selectedMedico && (
+          <>
+            <Text style={styles.label}>Especialidade (para escolha aleatória)</Text>
+            <View style={styles.inputWrap}>
+              <Picker
+                selectedValue={selectedEspecialidade}
+                onValueChange={(val) => setSelectedEspecialidade(val)}>
+                <Picker.Item label="Selecione..." value="" />
+                {especialidades.map(e => <Picker.Item key={e.value} label={e.label} value={e.value} />)}
+              </Picker>
+            </View>
+          </>
+        )}
+
         <Text style={styles.label}>Data (DD/MM/AAAA)</Text>
         <TextInput 
           style={styles.input} 
-          placeholder="Ex: 25/10/2023"
+          placeholder="Ex: 25/12/2023"
           value={data}
           onChangeText={setData}
           keyboardType="numeric"
@@ -103,11 +145,11 @@ const AgendarConsultaScreen = ({ navigation }) => {
           keyboardType="numeric"
         />
 
-        <TouchableOpacity style={styles.btnAgendar} onPress={handleAgendar}>
-          <Text style={styles.btnText}>Agendar consulta</Text>
+        <TouchableOpacity style={styles.btnConfirm} onPress={handleAgendar}>
+          <Text style={styles.btnText}>Agendar</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.btnCancelar} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.btnCancel} onPress={() => navigation.goBack()}>
           <Text style={[styles.btnText, {color: '#666'}]}>Cancelar</Text>
         </TouchableOpacity>
 
@@ -118,13 +160,13 @@ const AgendarConsultaScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20, color: '#333', textAlign: 'center' },
-  label: { fontSize: 16, color: '#333', marginBottom: 5, marginTop: 15, fontWeight: 'bold' },
+  header: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#007AFF' },
+  label: { fontSize: 14, fontWeight: 'bold', color: '#333', marginTop: 15, marginBottom: 5 },
+  inputWrap: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, backgroundColor: '#f9f9f9' },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: '#f9f9f9' },
-  pickerContainer: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, backgroundColor: '#f9f9f9' },
-  btnAgendar: { backgroundColor: '#007AFF', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 30 },
-  btnCancelar: { padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  btnConfirm: { backgroundColor: '#007AFF', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 30 },
+  btnCancel: { padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
 });
 
-export default AgendarConsultaScreen;
+export default AgendarConsultaScreen;   
