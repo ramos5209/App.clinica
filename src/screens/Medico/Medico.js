@@ -55,18 +55,29 @@ const MedicoCard = ({ medico, navigation, onDelete }) => {
   };
 
   const confirmDelete = () => {
-    Alert.alert(
-      "Desativar Médico",
-      `Tem certeza que deseja desativar o médico ${medico.nome}?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Confirmar", 
-          style: "destructive", 
-          onPress: () => onDelete(medico.id) 
-        }
-      ]
-    );
+    console.log("--- FRONTEND: Botão Desativar pressionado para:", medico.nome);
+
+    if (Platform.OS === 'web') {
+      // Lógica específica para Web (Navegador)
+      const confirmed = window.confirm(`Tem certeza que deseja desativar o médico ${medico.nome}?`);
+      if (confirmed) {
+        onDelete(medico.id);
+      }
+    } else {
+      // Lógica nativa (Android/iOS)
+      Alert.alert(
+        "Desativar Médico",
+        `Tem certeza que deseja desativar o médico ${medico.nome}?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { 
+            text: "Confirmar", 
+            style: "destructive", 
+            onPress: () => onDelete(medico.id) 
+          }
+        ]
+      );
+    }
   };
 
   return (

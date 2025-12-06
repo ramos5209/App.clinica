@@ -54,19 +54,31 @@ const PacienteCard = ({ paciente, navigation, onDelete }) => {
     setIsExpanded(!isExpanded);
   };
 
-  const confirmDelete = () => {
-    Alert.alert(
-      "Desativar Paciente",
-      `Tem certeza que deseja desativar o paciente ${paciente.nome}?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Confirmar", 
-          style: "destructive", 
-          onPress: () => onDelete(paciente.id) 
-        }
-      ]
-    );
+ const confirmDelete = () => {
+    // [LOG] Confirma se o botão foi clicado
+    console.log("--- FRONTEND: Botão Desativar pressionado para:", paciente.nome);
+
+    if (Platform.OS === 'web') {
+      // Lógica específica para Web
+      const confirmed = window.confirm(`Tem certeza que deseja desativar o paciente ${paciente.nome}?`);
+      if (confirmed) {
+        onDelete(paciente.id);
+      }
+    } else {
+      // Lógica nativa (Android/iOS)
+      Alert.alert(
+        "Desativar Paciente",
+        `Tem certeza que deseja desativar o paciente ${paciente.nome}?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { 
+            text: "Confirmar", 
+            style: "destructive", 
+            onPress: () => onDelete(paciente.id) 
+          }
+        ]
+      );
+    }
   };
 
   return (
